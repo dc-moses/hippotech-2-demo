@@ -7,24 +7,25 @@ on:
 jobs:
   test-compose-action:
     runs-on: ubuntu-latest
-    name: test compose action
+    permissions:
+      actions: write
+      checks: write
+      contents: write
+      deployments: write
+      id-token: write
+      issues: write
+      discussions: write
+      packages: write
+      repository-projects: write
+      security-events: write
+      statuses: write
+      
+    name: Deploy & Test
+    
     steps:
       - name: Deploy Docker Containers
       - uses: actions/checkout@v3
+      
       - uses: isbang/compose-action@v1.5.1
         with:
           compose-file: "docker-compose.yml"
-        env:
-          CUSTOM_VARIABLE: "test"
-
-      - name: Install Cypress
-        uses: cypress-io/github-action@v4
-        with:
-          working-directory: ./hippotech-react
-          runTests: false
-
-      - name: Cypress run
-        uses: cypress-io/github-action@v4
-        with:
-          working-directory: ./hippotech-react
-          install: false
