@@ -1,3 +1,4 @@
+name: CI V2 Docker Compose
 on:
   workflow_dispatch:
   pull_request:
@@ -8,9 +9,73 @@ jobs:
     runs-on: ubuntu-latest
     name: test compose action
     steps:
+        - name: Deploy Docker Containers
         - uses: actions/checkout@v3
         - uses: isbang/compose-action@v1.5.1
           with:
             compose-file: "docker-compose.yml"
           env:
             CUSTOM_VARIABLE: "test"
+
+        - name: Install Cypress
+          uses: cypress-io/github-action@v4
+          with:
+            working-directory: ./hippotech-react
+            runTests: false
+
+        - name: Cypress run
+          uses: cypress-io/github-action@v4
+          with:
+            working-directory: ./hippotech-react
+            install: false
+
+        - name: Run Automated Acceptance Tests
+          working-directory: ./jest
+          run: npm install && npm test
+        - name: List Seeker Vulnerabilities
+          if: ${{ steps.seeker-check.outputs.enabled == 'true' }}
+          uses: mtolley/seeker-github-actions/list-seeker-vulnerabilities@v1.1
+          with:
+            seekerAPIToken: ${{ secrets.SEEKER_ACCESS_TOKEN }}
+            minSeverity: HIGH
+            onlySeekerVerified: true
+
+        - name: Seeker Compliance Reporting
+          if: ${{ steps.seeker-check.outputs.enabled == 'true' }}
+          uses: mtolley/seeker-github-actions/seeker-compliance-reporting@v1.1
+          with:
+            seekerAPIToken: ${{ secrets.SEEKER_ACCESS_TOKEN }}
+            generateComplianceReportPDF: true
+            failBuildIfNotInCompliance: true
+        - name: Publish Test Report
+          uses: mikepenz/action-junit-report@v3
+          if: success() || failure() # always run even if the previous step fails
+          with:
+            report_paths: 'jest/*.xml'
+
+        - name: Get results from Seeker
+          if: ${{ steps.seeker-check.outputs.enabled == 'true' }}
+          uses: lejouni/seeker-report-export@main
+          with:
+            url: ${{vars.SEEKER_SERVER_URL}}
+            token: ${{secrets.SEEKER_ACCESS_TOKEN}}
+            project: ${{vars.SEEKER_PROJECT_KEY}}
+            format: sarif
+            stacktrace: true
+
+        - name: Upload SARIF file
+          if: ${{ steps.seeker-check.outputs.enabled == 'true' }}
+          uses: github/codeql-action/upload-sarif@v2
+          with:
+          # Path to SARIF file
+            sarif_file: ${{github.workspace}}/SeekerResults.sarif.json
+          #sarif_file: samplesarif.json
+          continue-on-error: false
+
+        - name: Archive scanning results
+          if: ${{ steps.seeker-check.outputs.enabled == 'true' }}
+          uses: actions/upload-artifact@v3
+          with:
+            name: seeker-analysis-results
+            path: ${{github.workspace}}/SeekerResults.sarif.json
+          continue-on-error: false
